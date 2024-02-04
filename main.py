@@ -1,79 +1,85 @@
-#!/usr/bin/python
-from time import sleep
-from colorama import Fore
+#!/usr/bin/env python
 import requests
-import string
-import random
+import json
+import os
+
+from pytimedinput import timedInput
+from getpass import getuser
+
+from fake_useragent import UserAgent
+from email_validator import validate_email 
 
 
-# Variables
-API = 'https://www.1secmail.com/api/v1/'
-headers = {
-    'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0'}
-domains = requests.get(API + '?action=getDomainList', headers=headers).json()
-json_data = " \"from\": \"{e_from}\",\n \"subject\": \"{sub}\",\n \"date\": \"{date}\",\n \"body\": \"{body}\",\n \"htmlBody\": \"{h_body}\""
-letters = string.ascii_letters
-
-# Generating mail from random symbols
-def generate_mail():
-    username = "".join(letters[random.randint(0, len(letters) - 1)]
-                       for i in range(15))
-
-    return f"{username}@{random.choice(domains)}"
-
-
-# Check Message Count And return comma if that > 1...
-def check_comma(msg_len, inter_n):
-    if msg_len > 1 and inter_n < msg_len:
-        return ','
-    return ''
-
-
-# Geting Message From Mail
-def get_messages(email):
-    print(f'{Fore.LIGHTCYAN_EX}[ INFO ] Waiting For Messages \n')
-    while True:
-        msg_n = 0
-        messages = requests.get(
-            API + f'?action=getMessages&login={email.split("@")[0]}&domain={email.split("@")[1]}', headers=headers).json()
-
-        if len(messages) > 0:
-            print(f'{Fore.LIGHTGREEN_EX}[ + ]', len(messages), 'Message(s) Geted')
-
-            with open('messages/messages.json', 'w+') as messages_json:
-                messages_json.write('[')
-                for message in messages:
-                    i_message = requests.get(
-                        API + f'https://www.1secmail.com/api/v1/?action=readMessage&login={email.split("@")[0]}&domain={email.split("@")[1]}&id={message["id"]}', headers=headers).json()
-                    
-                    i_message['body'] = i_message['body'].replace('"', '\\"')
-                    i_message['htmlBody'] = i_message['htmlBody'].replace('"', '\\"')
-
-                    print(
-                        f"{Fore.LIGHTMAGENTA_EX}[ MESSAGE ][ + ] id {i_message['id']}: Message Geted From {i_message['from']} in {i_message['date']}")
-
-                    messages_json.write("\n{\n" + json_data.format(e_from=i_message['from'], sub=i_message['subject'],
-                                                                   date=i_message['date'], body=i_message['body'].split('\n')[0], h_body=i_message['htmlBody'].split('\n')[0]) + f"\n}}{check_comma(len(messages), msg_n + 1)}")
-                    
-                    msg_n += 1
-                print('\n')
-
-            with open('messages/messages.json', 'a+') as messages_json:
-                messages_json.write('\n]')
-
-        sleep(10)
-
-
-def main():
+# Code
+def load_json(file: str) -> None:
     try:
-        mail = generate_mail()
-        print(f'{Fore.LIGHTGREEN_EX}[ + ] Temp Mail Successfully Generated: {mail}')
-        get_messages(mail)
-
+        with open(file, 'r+') as json_file:
+            return json.load(json_file)
+            
     except:
-        print(f' {Fore.LIGHTRED_EX}Error happened in proccess')
-        exit()
+        return {}
 
 
+def dump_2_json(data: dict | str, file: str) -> None:
+    file = file.split('/')
+    for folder in file[:-1]:
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        
+        os.chdir(folder)
+    
+    with open(file[-1], 'xt') as json_file:
+        json.dump(data, json_file, indent=4)
+
+
+def temp_mail(email: str, api: str) -> None:
+    email = email.split('@')
+
+    # Fetching single message: https://www.1secmail.com/api/v1/?action=readMessage&login=demo&domain=1secmail.com&id=639
+    print(f'Hey {getuser()}. Waiting for messages\n')
+
+    while True:
+        ua = UserAgent().random
+        messages = requests.get(api + f'getMessages&login={email[0]}&domain={email[1]}', json={'user-agent': ua}).json()
+
+        if messages:
+            print(f'Geted {len(messages)} New Messages\n')
+            data = load_json(f'files/json/{getuser()}.json')
+
+            for index, message in enumerate(messages):
+                if input(f'{index+1}. Message from {message["from"]}. Show ? '):
+                    full_message = requests.get(api + f'readMessage&login={email[0]}&domain={email[1]}&id={message["id"]}', json={'user-agent': ua}).json()
+                    
+                    # writing to json file
+                    if message["from"] not in data:
+                        data.update({message["from"]: [full_message]})
+                    
+                    # Checking if any current message in data
+                    elif not any(message["id"] == data_message['id'] for data_message in data[message["from"]]):
+                        data[message["from"]].append(full_message)
+
+                    for name, value in full_message.items():
+                        print(f'   {name}: {value}')
+            
+            # Dumping data to json  file
+            dump_2_json(data, f'files/json/{getuser()}.json')
+
+        key, successful = timedInput(f'Press \'q\' to exit: ', timeout=3)
+
+        if not successful and key == 'q':
+            exit()
+
+        
+
+    
 if __name__ == '__main__':
-    main()
+    print(f'{" Temp-Mail ":=^65}\n')
+    
+    API: str = 'https://www.1secmail.com/api/v1/?action='
+    # EMAIL: str = requests.get(API + 'genRandomMailbox', ).json()[0]
+    EMAIL = 'gnpk0ky@txcct.com'
+    
+    print(f'Your Temp Email: {EMAIL}')
+
+    validate_email(EMAIL)
+    temp_mail(email=EMAIL, api=API)
