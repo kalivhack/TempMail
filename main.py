@@ -76,10 +76,13 @@ if __name__ == '__main__':
     print(f'{" Temp-Mail ":=^65}\n')
     
     API: str = 'https://www.1secmail.com/api/v1/?action='
-    # EMAIL: str = requests.get(API + 'genRandomMailbox', ).json()[0]
-    EMAIL = 'gnpk0ky@txcct.com'
+    EMAIL: str = requests.get(API + 'genRandomMailbox', ).json()[0]
     
     print(f'Your Temp Email: {EMAIL}')
-
-    validate_email(EMAIL)
-    temp_mail(email=EMAIL, api=API)
+    
+    try:
+        validate_email(EMAIL)
+        temp_mail(email=EMAIL, api=API)
+    
+    except BaseException as ex:
+        print(ex)       
